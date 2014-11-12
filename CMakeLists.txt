@@ -36,6 +36,10 @@ find_package(Boost 1.49
       program_options
       unit_test_framework
       random
+      serialization
+      filesystem
+      thread
+      system
     REQUIRED
 )
 include_directories(${Boost_INCLUDE_DIRS})
@@ -55,19 +59,19 @@ endif (WIN32)
 # library.
 add_definitions(-DBOOST_TEST_DYN_LINK)
 
-ADD_EXECUTABLE( RTFFD
+#	train_ffd.cpp
+#train_headpose.cpp
+#eval_ffd.cpp
+ADD_EXECUTABLE( FaceForest
 	demo.cpp
-	eval_ffd.cpp
 	face_forest.cpp
 	face_utils.cpp
 	head_pose_sample.cpp
 	image_sample.cpp
 	multi_part_sample.cpp
-	train_ffd.cpp
-	train_headpose.cpp
 	)
 #message(">>> DSP_ICA_LIBS::${DSP_ICA_LIBS}" )
 #dynamic or static link
-TARGET_LINK_LIBRARIES( RTFFD
+TARGET_LINK_LIBRARIES( FaceForest
 	${OpenCV_LIBS}
 	${Boost_LIBRARIES})
