@@ -61,7 +61,7 @@ public:
       const cv::Rect face_bbox, const Forest<MPSample>& forest,
       MultiPartEstimatorOption option, std::vector<cv::Point>& ffd_cordinates);
 
-  static void show_results(const cv::Mat img, std::vector<Face>& faces,
+  static char show_results(const cv::Mat img, std::vector<Face>& faces,
       int wait_key = 0);
 
   FaceForest() :

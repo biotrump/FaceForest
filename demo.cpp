@@ -4,12 +4,12 @@
  *  Created on: Aug 11, 2012
  *      Author: Matthias Dantone
  */
-
 #include "forest.hpp"
 #include "multi_part_sample.hpp"
 #include "head_pose_sample.hpp"
 #include "face_utils.hpp"
-#include <istream>
+#include <iostream>
+#include "optionparser.h"
 #include <opencv2/opencv.hpp>
 #include <boost/progress.hpp>
 #include "face_forest.hpp"
@@ -94,6 +94,40 @@ void train_forest( ForestParam param,
 }
 
 void eval_forest( FaceForestOptions option,
+		int index=0 ){
+	VideoCapture vc(index);
+	if(!vc.isOpened())
+		return;
+	//init face forest
+	FaceForest ff(option);
+
+	while(1){
+		// load image
+		Mat image;
+		vc >> image; 	//get one frame
+		if (image.empty()){
+			std::cerr << "empty frame "<< std::endl;
+			continue;
+		}
+
+		// convert to grayscale
+		Mat img_gray;
+		cvtColor( image, img_gray, CV_BGR2GRAY );
+
+		vector<Face> faces;
+			ff.analize_image( img_gray, faces );
+
+		//cout << "ffd estimated" << endl;
+		//draw results
+		char key = FaceForest::show_results( image, faces, 5 );
+		if( (key == 'q' ) || ( key == 27 )){
+			cout << "key=" << key << std::endl;
+			break;
+		}
+	}
+}
+
+void eval_forest( FaceForestOptions option,
 		vector<FaceAnnotation>& annotations ){
 	//init face forest
 	FaceForest ff(option);
@@ -104,6 +138,7 @@ void eval_forest( FaceForestOptions option,
 		// load image
 		Mat image;
 		image = cv::imread(annotations[i].url,1);
+
 		if (image.data == NULL){
 			std::cerr << "could not load " << annotations[i].url << std::endl;
 			continue;
@@ -111,66 +146,132 @@ void eval_forest( FaceForestOptions option,
 
 		// convert to grayscale
 		Mat img_gray;
-    cvtColor( image, img_gray, CV_BGR2GRAY );
+		cvtColor( image, img_gray, CV_BGR2GRAY );
 
-    bool use_predefined_bbox = true;
-    vector<Face> faces;
-    if( use_predefined_bbox ){
-        Face face;
-        ff.analize_face( img_gray, annotations[i].bbox, face );
-        faces.push_back(face);
-    }else{
-        ff.analize_image( img_gray, faces );
-    }
+		bool use_predefined_bbox = false;//true;
+		vector<Face> faces;
+		if( use_predefined_bbox ){
+			Face face;
+			ff.analize_face( img_gray, annotations[i].bbox, face );
+			faces.push_back(face);
+		}else{
+			ff.analize_image( img_gray, faces );
+		}
 
-    cout << "ffd estimated" << endl;
-    //draw results
-    FaceForest::show_results( image, faces );
+		cout << "ffd estimated" << endl;
+		//draw results
+		FaceForest::show_results( image, faces );
 	}
 }
 
+//http://optionparser.sourceforge.net/
+//The Lean Mean C++ Option Parser
+enum  optionIndex { UNKNOWN, ANNOTATION, CONFIG_FDD, FACE_CASCADE, HEADPOSE,
+		HELP, MODE, VIDEO_I};
+const option::Descriptor usage[] =
+{
+	{UNKNOWN, 0,"" , ""    ,option::Arg::None, "USAGE: FaceForest [options]\n"
+												"Options:" },
+	{ANNOTATION,    0,"a" , "annotation",option::Arg::None,
+		" -a --annotation  \tuse annotation files." },
+	{CONFIG_FDD,    0,"c" , "config",option::Arg::Optional,
+		" -c --config  \tconfig file." },
+	{FACE_CASCADE,  0,"f" , "facecascade",option::Arg::Optional,
+		" -f --facecascade  \topenCV face cascade xml file" },
+	{HEADPOSE,    	0,"p" , "pose",option::Arg::Optional,
+		" -p --pose  \thead pose config file." },
+	{HELP,    		0,"h" , "help",option::Arg::None,
+		" -h --help \tPrint usage and exit." },
+	{MODE,    		0,"m" , "mode",option::Arg::Optional,
+		" -m[0,1] --mode[0,1],   \tmode 0 is training, mode 1 is runtime." },
+	{VIDEO_I,    	0,"i" , "video",option::Arg::Optional,
+		" -i[0,1,2] --video[0,1,2] \tvideo port index." },
+	{0,0,0,0,0,0}
+};
+
 int main(int argc, char** argv)
 {
-
-	if( argc < 3){
-		cout << "ERROR during flag parsing" << endl;
-		cout << "you need to set 4 flags: \n mode (0==training, 1==evaluate)" << endl;
-		cout << " path to ffd config file" << endl;
-		cout << " path to headpose config file" << endl;
-		cout << " path to face cascade" << endl;
-
-	}
-
+	int vi=0;
 	int mode = 1;
+	bool fannonation=false;
 	std::string ffd_config_file = "data/config_ffd.txt";
 	std::string headpose_config_file = "data/config_headpose.txt";
 	std::string face_cascade = "data/haarcascade_frontalface_alt.xml";
-	if( argc > 3 ){
-		try{
-			mode = boost::lexical_cast<int>(argv[1]);
-			ffd_config_file = argv[2];
-			headpose_config_file = argv[3];
-			face_cascade = argv[4];
-		}catch( char * str ) {
-			cout << "ERROR during flag parsing" << endl;
+	argc-=(argc>0); argv+=(argc>0); // skip program name argv[0] if present
+	option::Stats  stats(usage, argc, argv);
+	option::Option options[stats.options_max], buffer[stats.buffer_max];
+	option::Parser parse(usage, argc, argv, options, buffer);
+
+	if (parse.error()){
+		cout << "parsing error" << endl;
+		return 1;
+	}
+	cout << "optionsCount:" << parse.optionsCount() << endl;
+	for (int i = 0; i < parse.optionsCount(); ++i) {
+		option::Option& opt = buffer[i];
+		//cout << "[" << i << "]:" <<  opt.index() << endl;
+		switch(opt.index()) {
+		case ANNOTATION:
+			cout << "ANNOTATION" << endl;
+			fannonation=true;
+			break;
+		case CONFIG_FDD:
+			cout << "CONFIG_FDD" << CONFIG_FDD <<endl;
+			if(opt.arg){
+				ffd_config_file = opt.arg;
+				cout << "," << ffd_config_file << endl;
+			}
+			break;
+		case FACE_CASCADE:
+			cout << "FACE_CASCADE:" << FACE_CASCADE;
+			if(opt.arg){
+				face_cascade = opt.arg;
+				cout << "," <<face_cascade << endl;
+			}
+			break;
+		case HEADPOSE:
+			cout << "HEADPOSE" << HEADPOSE;
+			if(opt.arg){
+				headpose_config_file = opt.arg;
+				cout << "," << headpose_config_file << endl;
+			}
+			break;
+		case HELP:
+			cout << "HELP" << HELP<<endl;
+			option::printUsage(std::cout, usage);
+			exit(1);
+			break;
+		case MODE:
+			cout << "MODE:" << MODE <<endl;
+			if(opt.arg)
+				mode = atoi(opt.arg);
+			cout << "mode:" << mode << endl;
+			break;
+		case VIDEO_I:
+			cout << "VIDEO_I:" << VIDEO_I << endl;
+			if(opt.arg){
+				vi = atoi(opt.arg);
+			}
+			cout << "vi:" << vi << endl;
+			break;
+		case UNKNOWN:
+		default:
+			cout << "unknown" << opt.index() << endl;
+			break;
 		}
 	}
-
 
 	// parse config file
 	ForestParam mp_param;
 	assert(loadConfigFile(ffd_config_file, mp_param));
 
-	// loading GT
-	vector<FaceAnnotation> annotations;
-	load_annotations( annotations, mp_param.imgPath);
-
-
 	if( mode == 0){
+		// loading GT
+		vector<FaceAnnotation> annotations;
+		load_annotations( annotations, mp_param.imgPath);
+
 		train_forest( mp_param, annotations );
-
 	}else if( mode == 1 ){
-
 		FaceForestOptions option;
 		option.face_detection_option.path_face_cascade = face_cascade;
 
@@ -178,10 +279,14 @@ int main(int argc, char** argv)
 		assert(loadConfigFile(headpose_config_file, head_param));
 		option.head_pose_forest_param = head_param;
 		option.mp_forest_param = mp_param;
+		if(fannonation){
+			vector<FaceAnnotation> annotations;
+			load_annotations( annotations, mp_param.imgPath);
 
-		eval_forest(option, annotations);
-	}else{
-		cout << "unknown mode: " << mode << endl;
+			eval_forest(option, annotations);
+		}else{
+			eval_forest(option, vi);
+		}
 	}
 
 	return 0;
