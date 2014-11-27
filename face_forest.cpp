@@ -103,7 +103,7 @@ void FaceForest::estimate_ffd(const ImageSample& image_sample,
 
 }
 
-void FaceForest::show_results(const cv::Mat img, std::vector<Face>& faces,
+char FaceForest::show_results(const cv::Mat img, std::vector<Face>& faces,
     int wait_key) {
   cv::Mat image = img.clone();
 
@@ -115,6 +115,8 @@ void FaceForest::show_results(const cv::Mat img, std::vector<Face>& faces,
       cv::circle(image, cv::Point(x, y), 3, cv::Scalar(0, 255, 0, 0), -1);
     }
     cv::Rect bbox = faces[j].bbox;
+	//bias the bbox center. The bbox of face is a little lower because of the hair.
+	bbox.y = (bbox.y > bbox.height/6)? bbox.y- bbox.height/6: bbox.y;
     cv::Point_<int> a(bbox.x, bbox.y);
     cv::Point_<int> b(bbox.x + bbox.width, bbox.y);
     cv::Point_<int> c(bbox.x, bbox.y + bbox.height);
@@ -134,12 +136,13 @@ void FaceForest::show_results(const cv::Mat img, std::vector<Face>& faces,
     cv::line(image, b, y2, color, 2);
     cv::line(image, y2, d, color, 2);
 
+	//top and bottom lines
     cv::line(image, a, b, color, 2);
     cv::line(image, c, d, color, 2);
 
   }
   cv::imshow("Face", image);
-  cv::waitKey(wait_key);
+  return cv::waitKey(wait_key);
 }
 
 // END STATIC FUNCTIONS
@@ -171,7 +174,7 @@ void FaceForest::analize_image(cv::Mat img, vector<Face>& faces) {
   vector < Rect > faces_bboxes;
   detect_face(img, face_cascade, option_.face_detection_option, faces_bboxes);
 
-  cout << faces_bboxes.size() << " detected faces." << endl;
+  //cout << faces_bboxes.size() << " detected faces." << endl;
   // for each detected face
   for (unsigned int i = 0; i < faces_bboxes.size(); i++) {
     Face f;
